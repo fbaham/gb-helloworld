@@ -1,68 +1,93 @@
-INCLUDE "hardware.inc"
-
-SECTION "Header", ROM0[$100] ; I'm repeating this line so you know where we are. Don't write it twice!
-
-EntryPoint: ; This is where execution begins
-    di ; Disable interrupts. That way we can avoid dealing with them, especially since we didn't talk about them yet :p
-    jp Start ; Leave this tiny space
-
-REPT $150 - $104
-    db 0
-ENDR
-
-SECTION "Game code", ROM0
-
-Start:
-    ; Turn off the LCD
-.waitVBlank
-    ld a, [rLY]
-    cp 144 ; Check if the LCD is past VBlank
-    jr c, .waitVBlank
-    xor a ; ld a, 0 ; We only need to reset a value with bit 7 reset, but 0 does the job
-    ld [rLCDC], a ; We will have to write to LCDC again later, so it's not a bother, really.
-    ld hl, $9000
-    ld de, FontTiles
-    ld bc, FontTilesEnd - FontTiles
-.copyFont
-    ld a, [de] ; Grab 1 byte from the source
-    ld [hli], a ; Place it at the destination, incrementing hl
-    inc de ; Move to next byte
-    dec bc ; Decrement count
-    ld a, b ; Check if count is 0, since `dec bc` doesn't update flags
-    or c
-    jr nz, .copyFont
-    ld hl, $9800 ; This will print the string at the top-left corner of the screen
-    ld de, HelloWorldStr
-.copyString
-    ld a, [de]
-    ld [hli], a
-    inc de
-    and a ; Check if the byte we just copied is zero
-    jr nz, .copyString ; Continue if it's not
-    ; Init display registers
-    ld a, %11100100
-    ld [rBGP], a
-    xor a ; ld a, 0
-    ld [rSCY], a
-    ld [rSCX], a
-    ; Shut sound down
-    ld [rNR52], a
-    ; Turn screen on, display background
-    ld a, %10000001
-    ld [rLCDC], a
-    ; Lock up
-.lockup
-    jr .lockup
-    
-SECTION "Font", ROM0
-
-FontTiles:
-
-INCBIN "font.chr"
-
-FontTilesEnd:
-
-SECTION "Hello World string", ROM0
-
-HelloWorldStr:
-    db "Hello World!", 0
+; Hola mundo
+; David Pello 2010
+; ladecadence.net
+; Para el tutorial en: 
+; http://wiki.ladecadence.net/doku.php?id=tutorial_de_ensamblador
+ 
+INCLUDE "gbhw.inc"          ; importamos el archivo de definiciones
+ 
+ 
+; El programa comienza aqui:
+SECTION "start",ROM0[$0100]
+    nop
+    jp      inicio
+ 
+; Cabecera de la ROM (Macro definido en gbhw.inc)
+; define una rom sin mapper, de 32K y sin RAM, lo más básico
+; (como por ejemplo la del tetris)
+    ROM_HEADER  ROM_NOMBC, ROM_SIZE_32KBYTE, RAM_SIZE_0KBYTE
+ 
+; aqui empieza nuestro programa
+inicio:
+    nop
+    di                      ; deshabilita las interrupciones
+    ld      sp, $ffff       ; apuntamos la pila al tope de la ram
+ 
+inicializacion:
+    ld      a, %11100100    ; Colores de paleta desde el mas oscuro al
+                            ; más claro, 11 10 01 00
+    ld      [rBGP], a       ; escribimos esto en el registro de paleta
+ 
+    ld      a, 0            ; escribimos 0 en los registros de scroll X e Y
+    ld      [rSCX], a       ; con lo que posicionamos la pantalla visible
+    ld      [rSCY], a       ; al inicio (arriba a la izq) del fondo.
+ 
+    call    apaga_LCD       ; llamamos a la rutina que apaga el LCD
+ 
+    ; cargamos el tile en la memoria de tiles
+ 
+    ld      hl, TileCara    ; cargamos en HL la dirección de nuestro tile
+    ld      de, _VRAM       ; en DE dirección de la memoria de video
+    ld      b, 16           ; b = 16, numero de bytes a copiar
+ 
+.bucle_carga:
+    ld      a,[hl]          ; cargamos en A el dato apuntado por HL
+    ld      [de], a         ; y lo metemos en la dirección apuntada en DE
+    dec     b               ; decrementamos b, b=b-1
+    jr      z, .fin_bucle_carga ; si b = 0, terminamos, no queda nada por copiar
+    inc     hl              ; incrementamos la dirección a leer de
+    inc     de              ; incrementamos la dirección a escribir en
+    jr      .bucle_carga    ; seguimos
+.fin_bucle_carga:
+ 
+    ; escribimos nuestro tile, en el mapa de tiles
+ 
+    ld      hl, _SCRN0      ; en HL la dirección del mapa de fondo
+    ld      [hl], $00       ; $00 = el tile 0, nuestro tile.
+ 
+    ; configuramos y activamos el display
+    ld      a, LCDCF_ON|LCDCF_BG8000|LCDCF_BG9800|LCDCF_BGON|LCDCF_OBJ8|LCDCF_OBJOFF
+    ld      [rLCDC], a
+ 
+    ; bucle infinito
+bucle:
+    halt
+    nop
+    jr      bucle
+ 
+; Rutina de apagado del LCD
+apaga_LCD:
+    ld      a,[rLCDC]
+    rlca                    ; Pone el bit alto de LCDC en el flag de acarreo
+    ret     nc              ; La pantalla ya está apagada, volver.
+ 
+    ; esperamos al VBlank, ya que no podemos apagar la pantalla
+    ; en otro momento
+ 
+.espera_VBlank
+    ld      a, [rLY]
+    cp      145
+    jr      nz, .espera_VBlank
+ 
+    ; estamos en VBlank, apagamos el LCD
+    ld      a,[rLCDC]       ; en A, el contenido del LCDC
+    res     7,a             ; ponemos a cero el bit 7 (activado del LCD)
+    ld      [rLCDC],a       ; escribimos en el registro LCDC el contenido de A
+ 
+    ret                     ; volvemos
+ 
+; Datos de nuestro tile
+TileCara:
+    DB  $7C, $7C, $82, $FE, $82, $D6, $82, $D6
+    DB  $82, $FE, $82, $BA, $82, $C6, $7C, $7C
+EndTileCara:
