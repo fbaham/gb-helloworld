@@ -1,0 +1,4 @@
+bin/*.gb
+bin/*.gbc
+bin/*.gba
+obj/*.o
