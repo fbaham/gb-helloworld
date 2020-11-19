@@ -2,20 +2,20 @@ version: '3'
 services:
   rgbasm:
     build: . 
-    command: 'rgbasm -o obj/main.o main.asm' 
+    command: 'rgbasm -o obj/hellowindow.o hellowindow.asm' 
     volumes: 
     - .:/app
   rgblink:
     build: . 
     depends_on: 
     - rgbasm
-    command: 'rgblink -o bin/hello-world.gb obj/main.o' 
+    command: 'rgblink -o bin/hellowindow.gb obj/hellowindow.o' 
     volumes: 
     - .:/app
   rgbfix:
     build: . 
     depends_on: 
     - rgblink
-    command: 'rgbfix -v -p 0 bin/hello-world.gb' 
+    command: 'rgbfix -v -p 0 bin/hellowindow.gb' 
     volumes: 
     - .:/app
